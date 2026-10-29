@@ -8,3 +8,5 @@
 2. `docker compose --profile etl run --rm etl`
 3. `docker compose --profile seed run --rm seed`
 4. `docker compose up -d api ui`
+
+После запуска проекта откройте пользовательский интерфейс в браузере: http://localhost:8501
