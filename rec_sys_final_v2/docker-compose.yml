@@ -1,0 +1,63 @@
+services:
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-movies}
+      POSTGRES_USER: ${POSTGRES_USER:-movie_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change_me}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-movie_user} -d ${POSTGRES_DB:-movies}"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  api:
+    build: .
+    command: uvicorn api.main:app --host 0.0.0.0 --port 8000
+    environment:
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-movie_user}:${POSTGRES_PASSWORD:-change_me}@db:5432/${POSTGRES_DB:-movies}
+    ports:
+      - "8000:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+
+  etl:
+    build: .
+    command: python -m etl.load_movies
+    environment:
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-movie_user}:${POSTGRES_PASSWORD:-change_me}@db:5432/${POSTGRES_DB:-movies}
+      MOVIES_CSV: /app/data/movies.csv
+    volumes:
+      - ./data:/app/data
+    depends_on:
+      db:
+        condition: service_healthy
+    profiles: ["etl"]
+
+  seed:
+    build: .
+    command: python -m etl.seed_demo
+    environment:
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-movie_user}:${POSTGRES_PASSWORD:-change_me}@db:5432/${POSTGRES_DB:-movies}
+    depends_on:
+      db:
+        condition: service_healthy
+    profiles: ["seed"]
+
+  ui:
+    build: .
+    command: streamlit run app/Home.py --server.address=0.0.0.0 --server.port=8501
+    environment:
+      API_URL: http://api:8000
+    ports:
+      - "8501:8501"
+    depends_on:
+      - api
+
+volumes:
+  postgres_data:
